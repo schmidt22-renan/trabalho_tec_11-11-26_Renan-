@@ -1,5 +1,3 @@
-package model;
-
 import java.util.Objects;
 
 public class Participant {
@@ -10,12 +8,17 @@ public class Participant {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("O nome do participante não pode ser vazio.");
         }
-        this.id = Objects.requireNonNull(id, "ID não pode ser nulo.");
+        this.id = Objects.requireNonNull(id, "O ID não pode ser nulo.");
         this.name = name;
     }
 
-    public String getId() { return id; }
-    public String getName() { return name; }
+    public String getId() {
+        return id;
+    }
+
+    public String getName() {
+        return name;
+    }
 
     @Override
     public boolean equals(Object o) {

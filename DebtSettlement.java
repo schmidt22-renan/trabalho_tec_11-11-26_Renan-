@@ -1,5 +1,3 @@
-package model;
-
 import java.math.BigDecimal;
 
 public record DebtSettlement(Participant from, Participant to, BigDecimal amount) {
