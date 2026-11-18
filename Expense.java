@@ -17,42 +17,25 @@ public class Expense {
             throw new IllegalArgumentException("O valor da despesa deve ser maior que zero.");
         }
         if (splits == null || splits.isEmpty()) {
-            throw new IllegalArgumentException("A despesa deve ser dividida com pelo menos uma pessoa.");
+            throw new IllegalArgumentException("Selecione pelo menos um participante.");
         }
 
-        this.description = description;
-        this.paidBy = Objects.requireNonNull(paidBy, "Quem pagou a despesa é obrigatório.");
+        this.description = description.trim();
+        this.paidBy = Objects.requireNonNull(paidBy, "Pagador é obrigatório.");
         this.amount = amount.setScale(2, RoundingMode.HALF_UP);
         this.splits = Map.copyOf(splits);
 
-        validateSplitsSum();
-    }
-
-    private void validateSplitsSum() {
-        BigDecimal totalSplit = splits.values().stream()
+        BigDecimal totalSplit = this.splits.values().stream()
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .setScale(2, RoundingMode.HALF_UP);
 
         if (totalSplit.compareTo(this.amount) != 0) {
-            throw new IllegalArgumentException(
-                String.format("A soma das divisões (R$ %.2f) difere do valor total (R$ %.2f).", totalSplit, this.amount)
-            );
+            throw new IllegalArgumentException("A soma das divisões não bate com o valor total.");
         }
     }
 
-    public String getDescription() {
-        return description;
-    }
-
-    public Participant getPaidBy() {
-        return paidBy;
-    }
-
-    public BigDecimal getAmount() {
-        return amount;
-    }
-
-    public Map<Participant, BigDecimal> getSplits() {
-        return splits;
-    }
+    public String getDescription() { return description; }
+    public Participant getPaidBy() { return paidBy; }
+    public BigDecimal getAmount() { return amount; }
+    public Map<Participant, BigDecimal> getSplits() { return splits; }
 }

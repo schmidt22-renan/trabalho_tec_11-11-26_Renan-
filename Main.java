@@ -1,45 +1,115 @@
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+
+import java.io.IOException;
+import java.io.OutputStream;
 import java.math.BigDecimal;
-import java.util.List;
-import java.util.Map;
+import java.net.InetSocketAddress;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 
 public class Main {
-    public static void main(String[] args) {
-        ExpenseSplitterService service = new ExpenseSplitterService();
+    private static final ExpenseSplitterService service = new ExpenseSplitterService();
+    private static String lastError = null;
 
-        Participant ana = new Participant("1", "Ana");
-        Participant bruno = new Participant("2", "Bruno");
-        Participant carla = new Participant("3", "Carla");
-        Participant daniel = new Participant("4", "Daniel");
+    public static void main(String[] args) throws IOException {
+        int port = 8080;
+        HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
 
-        List<Participant> grupoCompleto = List.of(ana, bruno, carla, daniel);
-
-        service.addEqualExpense("Carne e Carvão", ana, new BigDecimal("200.00"), grupoCompleto);
-        service.addEqualExpense("Bebidas", bruno, new BigDecimal("120.00"), grupoCompleto);
-        service.addEqualExpense("Sobremesa", carla, new BigDecimal("40.00"), List.of(ana, bruno, carla));
-
-        Map<Participant, BigDecimal> divisaoUber = Map.of(
-                daniel, new BigDecimal("30.00"),
-                carla, new BigDecimal("20.00")
-        );
-        service.addExpense(new Expense("Uber de volta", ana, new BigDecimal("50.00"), divisaoUber));
-
-        System.out.println("=== SALDO LÍQUIDO POR PARTICIPANTE ===");
-        service.calculateNetBalances().forEach((participant, balance) -> {
-            if (balance.compareTo(BigDecimal.ZERO) > 0) {
-                System.out.printf("%-10s -> A receber: R$ %.2f%n", participant.getName(), balance);
-            } else if (balance.compareTo(BigDecimal.ZERO) < 0) {
-                System.out.printf("%-10s -> A pagar:   R$ %.2f%n", participant.getName(), balance.abs());
-            } else {
-                System.out.printf("%-10s -> Quitado%n", participant.getName());
-            }
+        server.createContext("/", exchange -> {
+            String html = WebInterface.renderPage(service, lastError);
+            lastError = null;
+            sendHtml(exchange, html);
         });
 
-        System.out.println("\n=== TRANSFERÊNCIAS NECESSÁRIAS ===");
-        List<DebtSettlement> settlements = service.settleDebts();
-        if (settlements.isEmpty()) {
-            System.out.println("Nenhuma transferência necessária. Tudo quitado!");
-        } else {
-            settlements.forEach(System.out::println);
+        server.createContext("/add-participant", exchange -> {
+            if ("POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                Map<String, List<String>> params = parseForm(exchange);
+                try {
+                    String name = getFirst(params, "name");
+                    service.registerParticipant(name);
+                } catch (Exception e) {
+                    lastError = e.getMessage();
+                }
+            }
+            redirectHome(exchange);
+        });
+
+        server.createContext("/add-expense", exchange -> {
+            if ("POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                Map<String, List<String>> params = parseForm(exchange);
+                try {
+                    String description = getFirst(params, "description");
+                    BigDecimal amount = new BigDecimal(getFirst(params, "amount").replace(",", "."));
+                    Participant payer = service.findParticipantById(getFirst(params, "paidBy"));
+
+                    List<String> sharedIds = params.getOrDefault("sharedWith", List.of());
+                    List<Participant> sharedWith = new ArrayList<>();
+                    for (String id : sharedIds) {
+                        sharedWith.add(service.findParticipantById(id));
+                    }
+
+                    service.addEqualExpense(description, payer, amount, sharedWith);
+                } catch (Exception e) {
+                    lastError = e.getMessage();
+                }
+            }
+            redirectHome(exchange);
+        });
+
+        server.createContext("/clear", exchange -> {
+            if ("POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                service.clearAll();
+                lastError = null;
+            }
+            redirectHome(exchange);
+        });
+
+        server.setExecutor(null);
+        server.start();
+
+        System.out.println("=======================================================");
+        System.out.println("Sistema iniciado com sucesso na porta " + port + "!");
+        System.out.println("Clique em 'Abrir no Navegador' na notificação do Codespaces");
+        System.out.println("ou acesse a aba 'Portas' (Ports) e abra o endereço da porta 8080.");
+        System.out.println("=======================================================");
+    }
+
+    private static void sendHtml(HttpExchange exchange, String html) throws IOException {
+        byte[] bytes = html.getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "text/html; charset=UTF-8");
+        exchange.sendResponseHeaders(200, bytes.length);
+        try (OutputStream os = exchange.getResponseBody()) {
+            os.write(bytes);
         }
+    }
+
+    private static void redirectHome(HttpExchange exchange) throws IOException {
+        exchange.getResponseHeaders().set("Location", "/");
+        exchange.sendResponseHeaders(303, -1);
+        exchange.close();
+    }
+
+    private static Map<String, List<String>> parseForm(HttpExchange exchange) throws IOException {
+        String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        Map<String, List<String>> params = new HashMap<>();
+        if (body.isBlank()) return params;
+
+        for (String pair : body.split("&")) {
+            String[] kv = pair.split("=", 2);
+            String key = URLDecoder.decode(kv[0], StandardCharsets.UTF_8);
+            String value = kv.length > 1 ? URLDecoder.decode(kv[1], StandardCharsets.UTF_8) : "";
+            params.computeIfAbsent(key, k -> new ArrayList<>()).add(value);
+        }
+        return params;
+    }
+
+    private static String getFirst(Map<String, List<String>> params, String key) {
+        List<String> values = params.get(key);
+        if (values == null || values.isEmpty()) {
+            throw new IllegalArgumentException("Campo obrigatório ausente: " + key);
+        }
+        return values.get(0);
     }
 }

@@ -4,7 +4,7 @@ import java.util.*;
 
 public class ExpenseSplitterService {
     private final List<Expense> expenses = new ArrayList<>();
-    private final Set<Participant> participants = new LinkedHashSet<>();
+    private final List<Participant> participants = new ArrayList<>();
 
     private static class BalanceEntry {
         final Participant participant;
@@ -16,13 +16,29 @@ public class ExpenseSplitterService {
         }
     }
 
-    public void addParticipant(Participant participant) {
-        participants.add(Objects.requireNonNull(participant, "Participante não pode ser nulo."));
+    public Participant registerParticipant(String name) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Digite um nome válido.");
+        }
+        boolean exists = participants.stream().anyMatch(p -> p.getName().equalsIgnoreCase(name.trim()));
+        if (exists) {
+            throw new IllegalArgumentException("Participante já cadastrado.");
+        }
+        Participant p = new Participant(String.valueOf(participants.size() + 1), name.trim());
+        participants.add(p);
+        return p;
+    }
+
+    public Participant findParticipantById(String id) {
+        return participants.stream()
+                .filter(p -> p.getId().equals(id))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Participante não encontrado."));
     }
 
     public void addEqualExpense(String description, Participant paidBy, BigDecimal amount, List<Participant> sharedWith) {
         if (sharedWith == null || sharedWith.isEmpty()) {
-            throw new IllegalArgumentException("A lista de participantes para divisão não pode ser vazia.");
+            throw new IllegalArgumentException("Selecione pelo menos 1 participante para dividir.");
         }
 
         BigDecimal totalAmount = amount.setScale(2, RoundingMode.HALF_UP);
@@ -43,14 +59,7 @@ public class ExpenseSplitterService {
             }
         }
 
-        addExpense(new Expense(description, paidBy, totalAmount, splits));
-    }
-
-    public void addExpense(Expense expense) {
-        Objects.requireNonNull(expense, "A despesa não pode ser nula.");
-        expenses.add(expense);
-        participants.add(expense.getPaidBy());
-        participants.addAll(expense.getSplits().keySet());
+        expenses.add(new Expense(description, paidBy, totalAmount, splits));
     }
 
     public Map<Participant, BigDecimal> calculateNetBalances() {
@@ -67,7 +76,6 @@ public class ExpenseSplitterService {
                 balances.put(participant, balances.get(participant).subtract(share));
             });
         }
-
         return balances;
     }
 
@@ -90,15 +98,13 @@ public class ExpenseSplitterService {
         creditors.sort((a, b) -> b.amount.compareTo(a.amount));
 
         List<DebtSettlement> settlements = new ArrayList<>();
-        int i = 0;
-        int j = 0;
+        int i = 0, j = 0;
 
         while (i < debtors.size() && j < creditors.size()) {
             BalanceEntry debtor = debtors.get(i);
             BalanceEntry creditor = creditors.get(j);
 
             BigDecimal transferAmount = debtor.amount.min(creditor.amount);
-
             settlements.add(new DebtSettlement(debtor.participant, creditor.participant, transferAmount));
 
             debtor.amount = debtor.amount.subtract(transferAmount);
@@ -107,11 +113,14 @@ public class ExpenseSplitterService {
             if (debtor.amount.compareTo(BigDecimal.ZERO) == 0) i++;
             if (creditor.amount.compareTo(BigDecimal.ZERO) == 0) j++;
         }
-
         return settlements;
     }
 
-    public List<Expense> getExpenses() {
-        return Collections.unmodifiableList(expenses);
+    public List<Participant> getParticipants() { return Collections.unmodifiableList(participants); }
+    public List<Expense> getExpenses() { return Collections.unmodifiableList(expenses); }
+
+    public void clearAll() {
+        expenses.clear();
+        participants.clear();
     }
 }

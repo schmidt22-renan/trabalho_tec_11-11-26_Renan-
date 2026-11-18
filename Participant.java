@@ -8,17 +8,12 @@ public class Participant {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("O nome do participante não pode ser vazio.");
         }
-        this.id = Objects.requireNonNull(id, "O ID não pode ser nulo.");
-        this.name = name;
+        this.id = Objects.requireNonNull(id, "ID não pode ser nulo.");
+        this.name = name.trim();
     }
 
-    public String getId() {
-        return id;
-    }
-
-    public String getName() {
-        return name;
-    }
+    public String getId() { return id; }
+    public String getName() { return name; }
 
     @Override
     public boolean equals(Object o) {
@@ -29,12 +24,8 @@ public class Participant {
     }
 
     @Override
-    public int hashCode() {
-        return Objects.hash(id);
-    }
+    public int hashCode() { return Objects.hash(id); }
 
     @Override
-    public String toString() {
-        return name;
-    }
+    public String toString() { return name; }
 }
